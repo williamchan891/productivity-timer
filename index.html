@@ -1,0 +1,2143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus — Productivity Timer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --surface-2: #f5f5f4;
+    --surface-hover: #f5f5f4;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-muted: #57534e;
+    --text-subtle: #a8a29e;
+    --ring-bg: #e7e5e4;
+
+    --focus: #e85d4d;
+    --break: #10b981;
+    --long-break: #3b82f6;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow: 0 4px 20px rgba(0,0,0,0.05);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
+    --backdrop: rgba(28, 25, 23, 0.4);
+
+    --radius-sm: 8px;
+    --radius: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  [data-theme="dark"] {
+    --bg: #0c0a09;
+    --surface: #1c1917;
+    --surface-2: #292524;
+    --surface-hover: #292524;
+    --border: #292524;
+    --border-strong: #44403c;
+    --text: #fafaf9;
+    --text-muted: #d6d3d1;
+    --text-subtle: #a8a29e;
+    --ring-bg: #292524;
+
+    --focus: #f87171;
+    --break: #34d399;
+    --long-break: #60a5fa;
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow: 0 4px 20px rgba(0,0,0,0.4);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.6);
+    --backdrop: rgba(0, 0, 0, 0.6);
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    transition: background var(--transition), color var(--transition);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'ss01';
+    line-height: 1.5;
+  }
+
+  button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  input, select { font-family: inherit; }
+
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 24px 48px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+  }
+
+  .logo-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--text);
+    display: grid;
+    place-items: center;
+    color: var(--bg);
+  }
+
+  .logo-mark svg { width: 16px; height: 16px; }
+
+  .header-actions { display: flex; gap: 4px; }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-sm);
+    display: grid;
+    place-items: center;
+    color: var(--text-muted);
+    transition: background var(--transition), color var(--transition);
+  }
+
+  .icon-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .icon-btn svg { width: 18px; height: 18px; }
+
+  /* Presets */
+  .presets {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
+  .presets::-webkit-scrollbar { height: 4px; }
+  .presets::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+  .presets::-webkit-scrollbar-track { background: transparent; }
+
+  .preset-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: all var(--transition);
+    flex-shrink: 0;
+  }
+
+  .preset-pill:hover {
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+
+  .preset-pill.active {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+
+  .preset-pill .meta {
+    opacity: 0.6;
+    font-size: 12px;
+  }
+
+  .preset-pill.add-preset {
+    border-style: dashed;
+    color: var(--text-subtle);
+  }
+
+  .preset-pill.add-preset:hover {
+    color: var(--text-muted);
+    border-style: dashed;
+  }
+
+  /* Timer card */
+  .timer-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 32px;
+  }
+
+  .phase-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 24px;
+    transition: all var(--transition);
+  }
+
+  .phase-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .phase-badge[data-phase="focus"] {
+    color: var(--focus);
+    background: color-mix(in srgb, var(--focus) 12%, transparent);
+  }
+
+  .phase-badge[data-phase="break"] {
+    color: var(--break);
+    background: color-mix(in srgb, var(--break) 12%, transparent);
+  }
+
+  .phase-badge[data-phase="longBreak"] {
+    color: var(--long-break);
+    background: color-mix(in srgb, var(--long-break) 12%, transparent);
+  }
+
+  .phase-badge.idle .phase-dot { animation: none; opacity: 0.6; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .ring-wrap {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    margin-bottom: 32px;
+  }
+
+  .timer-ring {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: var(--ring-bg);
+    stroke-width: 6;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 250ms linear, stroke 300ms ease;
+  }
+
+  .ring-progress[data-phase="focus"] { stroke: var(--focus); }
+  .ring-progress[data-phase="break"] { stroke: var(--break); }
+  .ring-progress[data-phase="longBreak"] { stroke: var(--long-break); }
+
+  .timer-display {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .time {
+    font-size: 64px;
+    font-weight: 200;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+
+  .time .ms {
+    font-size: 28px;
+    color: var(--text-subtle);
+    margin-left: 4px;
+  }
+
+  .cycle-info {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-subtle);
+    font-weight: 500;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 22px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    font-size: 14px;
+    font-weight: 600;
+    transition: all var(--transition);
+    white-space: nowrap;
+  }
+
+  .btn:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: var(--text);
+    color: var(--bg);
+    min-width: 130px;
+    height: 48px;
+    font-size: 15px;
+  }
+
+  .btn-primary:hover { opacity: 0.9; }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    background: var(--surface-hover);
+    color: var(--text);
+    border-color: var(--border-strong);
+  }
+
+  .btn-ghost {
+    color: var(--text-muted);
+    padding: 0 14px;
+  }
+
+  .btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
+
+  .btn-danger {
+    color: #dc2626;
+    background: color-mix(in srgb, #dc2626 8%, transparent);
+  }
+
+  [data-theme="dark"] .btn-danger { color: #f87171; background: color-mix(in srgb, #f87171 12%, transparent); }
+
+  .btn-danger:hover { background: color-mix(in srgb, #dc2626 16%, transparent); }
+
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Stats card */
+  .stats {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+  }
+
+  .stats-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .stats-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .stat-item .label {
+    font-size: 12px;
+    color: var(--text-subtle);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .stat-item .value {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat-item .sub {
+    font-size: 12px;
+    color: var(--text-subtle);
+    margin-top: 2px;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 16px;
+  }
+
+  .modal.open { display: flex; }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backdrop);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    animation: fadeIn 200ms ease;
+  }
+
+  .modal-content {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 480px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .modal-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* Form */
+  .form-group { margin-bottom: 18px; }
+  .form-group:last-child { margin-bottom: 0; }
+
+  .form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .form-help {
+    font-size: 12px;
+    color: var(--text-subtle);
+    margin-top: 4px;
+  }
+
+  .form-input,
+  .form-select {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    transition: border-color var(--transition), box-shadow var(--transition);
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: var(--text);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 8%, transparent);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  /* Section header inside modal */
+  .section-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 24px 0 10px;
+  }
+
+  .section-header:first-child { margin-top: 0; }
+
+  /* Settings rows */
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .setting-row:last-child { border-bottom: none; }
+
+  .setting-label .title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .setting-label .desc {
+    font-size: 12px;
+    color: var(--text-subtle);
+    margin-top: 2px;
+  }
+
+  /* Toggle switch */
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: var(--border-strong);
+    transition: background var(--transition);
+    flex-shrink: 0;
+  }
+
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: white;
+    transition: transform var(--transition);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .toggle.active {
+    background: var(--text);
+  }
+
+  .toggle.active::after { transform: translateX(16px); }
+
+  /* Sound options */
+  .sound-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .sound-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    transition: all var(--transition);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .sound-option:hover { border-color: var(--border-strong); }
+
+  .sound-option.active {
+    border-color: var(--text);
+    background: color-mix(in srgb, var(--text) 4%, var(--surface));
+  }
+
+  .sound-option .play {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    display: grid;
+    place-items: center;
+    color: var(--text-muted);
+    transition: all var(--transition);
+  }
+
+  .sound-option .play:hover { background: var(--text); color: var(--bg); }
+
+  .sound-option .play svg { width: 10px; height: 10px; }
+
+  /* Preset list (in settings) */
+  .preset-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .preset-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    transition: all var(--transition);
+  }
+
+  .preset-item:hover { border-color: var(--border-strong); }
+
+  .preset-item .info { flex: 1; min-width: 0; }
+  .preset-item .name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .preset-item .desc {
+    font-size: 12px;
+    color: var(--text-subtle);
+  }
+
+  .preset-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .preset-actions .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .preset-actions .icon-btn svg { width: 14px; height: 14px; }
+
+  /* Volume slider */
+  .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+  }
+
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    cursor: pointer;
+    border: none;
+    transition: transform var(--transition);
+  }
+
+  .slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    cursor: pointer;
+    border: none;
+  }
+
+  .slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--text);
+    color: var(--bg);
+    padding: 10px 18px;
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 100;
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-subtle);
+    font-size: 13px;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    .app { padding: 16px 16px 32px; }
+    .ring-wrap { width: 280px; height: 280px; }
+    .time { font-size: 56px; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .form-row { grid-template-columns: 1fr; }
+    .sound-options { grid-template-columns: 1fr; }
+  }
+
+  /* Reduce motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8.5" r="5.5"/>
+          <path d="M8 5.5v3l1.5 1"/>
+          <path d="M6 1.5h4"/>
+        </svg>
+      </div>
+      <span>Focus</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="stats-btn" aria-label="Statistics" title="Statistics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10"/>
+          <line x1="12" y1="20" x2="12" y2="4"/>
+          <line x1="6" y1="20" x2="6" y2="14"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="settings-btn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="icon-btn" id="theme-btn" aria-label="Toggle theme" title="Toggle theme">
+        <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="presets" id="presets"></div>
+
+  <div class="timer-section">
+    <div class="phase-badge idle" id="phase-badge" data-phase="focus">
+      <span class="phase-dot"></span>
+      <span id="phase-label">Focus</span>
+    </div>
+
+    <div class="ring-wrap">
+      <svg class="timer-ring" viewBox="0 0 320 320">
+        <circle class="ring-bg" cx="160" cy="160" r="150"/>
+        <circle class="ring-progress" id="ring-progress" data-phase="focus" cx="160" cy="160" r="150" stroke-dasharray="942.48" stroke-dashoffset="0"/>
+      </svg>
+      <div class="timer-display">
+        <div class="time" id="time-display">25:00</div>
+        <div class="cycle-info" id="cycle-info">Cycle 1 of 4</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="reset-btn" title="Reset (R)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+        Reset
+      </button>
+      <button class="btn btn-primary" id="start-btn" title="Start/Pause (Space)">
+        <svg id="start-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="6 4 20 12 6 20"/>
+        </svg>
+        <span id="start-label">Start</span>
+      </button>
+      <button class="btn btn-secondary" id="skip-btn" title="Skip phase (S)">
+        Skip
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 4 15 12 5 20" fill="currentColor"/>
+          <line x1="19" y1="5" x2="19" y2="19"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stats-header">
+      <span class="stats-title">Today</span>
+      <span class="stats-title" id="today-date" style="font-weight: 500; text-transform: none; letter-spacing: 0;"></span>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="label">Sessions</div>
+        <div class="value" id="stat-sessions-today">0</div>
+        <div class="sub" id="stat-sessions-week">0 this week</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">Focus time</div>
+        <div class="value" id="stat-focus-today">0m</div>
+        <div class="sub" id="stat-focus-week">0m this week</div>
+      </div>
+      <div class="stat-item">
+        <div class="label">All-time</div>
+        <div class="value" id="stat-focus-total">0h</div>
+        <div class="sub" id="stat-sessions-total">0 sessions</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal" id="settings-modal">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title">Settings</h2>
+      <button class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <div class="section-header">Appearance</div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">Theme</div>
+          <div class="desc">Light, dark, or follow system</div>
+        </div>
+        <select class="form-select" id="theme-select" style="width: 140px;">
+          <option value="auto">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
+
+      <div class="section-header">Sound</div>
+      <div class="form-group">
+        <label class="form-label">Alert sound</label>
+        <div class="sound-options" id="sound-options"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Volume <span id="volume-display" style="color: var(--text-subtle); float: right;">50%</span></label>
+        <input type="range" min="0" max="100" value="50" class="slider" id="volume-slider">
+      </div>
+
+      <div class="section-header">Notifications</div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">Browser notifications</div>
+          <div class="desc">Alerts when phases start and end</div>
+        </div>
+        <button class="toggle" id="notif-toggle" aria-label="Toggle notifications"></button>
+      </div>
+
+      <div class="section-header">Behavior</div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">Auto-start breaks</div>
+          <div class="desc">Begin breaks immediately after focus</div>
+        </div>
+        <button class="toggle" id="autobreak-toggle" aria-label="Auto-start breaks"></button>
+      </div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">Auto-start focus</div>
+          <div class="desc">Begin next focus session after break</div>
+        </div>
+        <button class="toggle" id="autofocus-toggle" aria-label="Auto-start focus"></button>
+      </div>
+
+      <div class="section-header">Presets</div>
+      <div class="preset-list" id="preset-manage-list"></div>
+      <button class="btn btn-secondary" id="add-preset-btn-2" style="width: 100%; margin-top: 12px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Create custom preset
+      </button>
+
+      <div class="section-header">Data</div>
+      <div class="setting-row">
+        <div class="setting-label">
+          <div class="title">Reset statistics</div>
+          <div class="desc">Clear all session history</div>
+        </div>
+        <button class="btn btn-secondary btn-danger" id="reset-stats-btn" style="height: 32px; padding: 0 14px; font-size: 13px;">Reset</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Preset Editor Modal -->
+<div class="modal" id="preset-modal">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title" id="preset-modal-title">New preset</h2>
+      <button class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="modal-body" id="preset-modal-body">
+      <div class="form-group">
+        <label class="form-label" for="preset-name">Name</label>
+        <input type="text" class="form-input" id="preset-name" placeholder="My custom preset" maxlength="30">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="preset-focus">Focus duration</label>
+          <input type="number" class="form-input" id="preset-focus" min="1" max="180" value="25">
+          <div class="form-help">In minutes (1–180)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="preset-break">Short break</label>
+          <input type="number" class="form-input" id="preset-break" min="1" max="60" value="5">
+          <div class="form-help">In minutes (1–60)</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="preset-longbreak">Long break</label>
+          <input type="number" class="form-input" id="preset-longbreak" min="1" max="60" value="15">
+          <div class="form-help">In minutes (1–60)</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="preset-cycles">Cycles before long break</label>
+          <input type="number" class="form-input" id="preset-cycles" min="1" max="12" value="4">
+          <div class="form-help">Focus rounds (1–12)</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="preset-delete-btn" style="margin-right: auto; display: none;">Delete</button>
+      <button class="btn btn-secondary" data-close>Cancel</button>
+      <button class="btn btn-primary" id="preset-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ============================================
+// Constants & Default Data
+// ============================================
+
+const STORAGE_KEY = 'focus-timer-v1';
+
+const DEFAULT_PRESETS = [
+  { id: 'pomodoro',  name: 'Pomodoro',  focus: 25, break: 5,  longBreak: 15, cycles: 4, type: 'standard', builtin: true },
+  { id: 'method-52',  name: '52 / 17',   focus: 52, break: 17, longBreak: 17, cycles: 4, type: 'standard', builtin: true },
+  { id: 'method-75',  name: '75 / 33',   focus: 75, break: 33, longBreak: 33, cycles: 3, type: 'standard', builtin: true },
+  { id: 'ultradian',  name: '90 min Ultradian', focus: 90, break: 20, longBreak: 30, cycles: 3, type: 'standard', builtin: true },
+  { id: 'method-50',  name: '50 / 10',   focus: 50, break: 10, longBreak: 20, cycles: 4, type: 'standard', builtin: true },
+  { id: 'animedoro',  name: 'Animedoro', focus: 40, break: 20, longBreak: 20, cycles: 3, type: 'standard', builtin: true },
+  { id: 'flowtime',   name: 'Flowtime',  type: 'flowtime', builtin: true }
+];
+
+const SOUNDS = [
+  { id: 'bell',    name: 'Bell' },
+  { id: 'chime',   name: 'Chime' },
+  { id: 'beep',    name: 'Digital' },
+  { id: 'soft',    name: 'Soft tone' },
+  { id: 'marimba', name: 'Marimba' },
+  { id: 'none',    name: 'Silent' }
+];
+
+// ============================================
+// State
+// ============================================
+
+const state = {
+  presets: [],
+  presetOverrides: {}, // overrides for builtin presets: { id: { focus, break, longBreak, cycles } }
+  activePresetId: 'pomodoro',
+  settings: {
+    theme: 'auto',
+    sound: 'bell',
+    volume: 0.5,
+    notifications: false,
+    autoBreak: false,
+    autoFocus: false
+  },
+  stats: {
+    daily: {}, // { 'YYYY-MM-DD': { sessions, focusMs } }
+    totalSessions: 0,
+    totalFocusMs: 0
+  },
+  timer: {
+    isRunning: false,
+    isPaused: false,
+    phase: 'focus',  // 'focus' | 'break' | 'longBreak'
+    cycle: 1,
+    remainingMs: 0,
+    totalMs: 0,
+    endTime: 0,
+    elapsedMs: 0,    // for flowtime
+    countUpStart: 0  // for flowtime
+  },
+  editingPresetId: null,
+  rafHandle: null
+};
+
+// ============================================
+// Storage
+// ============================================
+
+function saveState() {
+  try {
+    const data = {
+      presets: state.presets.filter(p => !p.builtin),
+      presetOverrides: state.presetOverrides,
+      activePresetId: state.activePresetId,
+      settings: state.settings,
+      stats: state.stats
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (e) { console.warn('Save failed', e); }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      state.presets = [...DEFAULT_PRESETS];
+      return;
+    }
+    const data = JSON.parse(raw);
+    const customs = (data.presets || []).map(p => ({ ...p, builtin: false, type: p.type || 'standard' }));
+    state.presets = [...DEFAULT_PRESETS, ...customs];
+    state.presetOverrides = data.presetOverrides || {};
+    state.activePresetId = data.activePresetId || 'pomodoro';
+    state.settings = { ...state.settings, ...(data.settings || {}) };
+    state.stats = { ...state.stats, ...(data.stats || {}) };
+
+    // Validate active preset exists
+    if (!state.presets.find(p => p.id === state.activePresetId)) {
+      state.activePresetId = 'pomodoro';
+    }
+  } catch (e) {
+    console.warn('Load failed', e);
+    state.presets = [...DEFAULT_PRESETS];
+  }
+}
+
+// ============================================
+// Helpers
+// ============================================
+
+function getActivePreset() {
+  const base = state.presets.find(p => p.id === state.activePresetId) || state.presets[0];
+  if (base.builtin && state.presetOverrides[base.id]) {
+    return { ...base, ...state.presetOverrides[base.id] };
+  }
+  return base;
+}
+
+function getPresetById(id) {
+  const p = state.presets.find(p => p.id === id);
+  if (!p) return null;
+  if (p.builtin && state.presetOverrides[id]) return { ...p, ...state.presetOverrides[id] };
+  return p;
+}
+
+function todayKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function startOfWeekKey() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
+  return new Date(d.setDate(diff));
+}
+
+function getWeekStats() {
+  let sessions = 0, focusMs = 0;
+  const start = startOfWeekKey();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = todayKey(d);
+    if (state.stats.daily[key]) {
+      sessions += state.stats.daily[key].sessions || 0;
+      focusMs += state.stats.daily[key].focusMs || 0;
+    }
+  }
+  return { sessions, focusMs };
+}
+
+function formatTime(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const remM = m % 60;
+    return `${String(h).padStart(2,'0')}:${String(remM).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function formatDuration(ms) {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remM = minutes % 60;
+  if (remM === 0) return `${hours}h`;
+  return `${hours}h ${remM}m`;
+}
+
+function formatTodayDate() {
+  const d = new Date();
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function getPresetSummary(p) {
+  if (p.type === 'flowtime') return 'Count up · auto-calculated break';
+  return `${p.focus}m focus · ${p.break}m break · long break every ${p.cycles}`;
+}
+
+function getFlowtimeBreak(workMs) {
+  const m = workMs / 60000;
+  if (m < 25) return 5 * 60 * 1000;
+  if (m < 50) return 8 * 60 * 1000;
+  if (m < 90) return 10 * 60 * 1000;
+  return 15 * 60 * 1000;
+}
+
+// ============================================
+// Theme
+// ============================================
+
+function applyTheme() {
+  const setting = state.settings.theme;
+  let theme = setting;
+  if (setting === 'auto') {
+    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon(theme);
+}
+
+function updateThemeIcon(theme) {
+  const icon = document.getElementById('theme-icon');
+  if (theme === 'dark') {
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  } else {
+    icon.innerHTML = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  }
+}
+
+function toggleTheme() {
+  // Cycle: auto -> light -> dark -> auto
+  const order = ['auto', 'light', 'dark'];
+  const idx = order.indexOf(state.settings.theme);
+  state.settings.theme = order[(idx + 1) % order.length];
+  applyTheme();
+  saveState();
+  showToast(`Theme: ${state.settings.theme.charAt(0).toUpperCase() + state.settings.theme.slice(1)}`);
+  document.getElementById('theme-select').value = state.settings.theme;
+}
+
+// Listen for system theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (state.settings.theme === 'auto') applyTheme();
+});
+
+// ============================================
+// Sound Engine
+// ============================================
+
+const Sounds = {
+  ctx: null,
+
+  ensureCtx() {
+    if (!this.ctx) {
+      try {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        return null;
+      }
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+
+  play(name, vol) {
+    if (name === 'none') return;
+    const ctx = this.ensureCtx();
+    if (!ctx) return;
+    vol = vol == null ? state.settings.volume : vol;
+    if (vol <= 0) return;
+
+    const fn = this[name];
+    if (typeof fn === 'function') fn.call(this, ctx, vol);
+  },
+
+  bell(ctx, vol) {
+    const t = ctx.currentTime;
+    const harmonics = [
+      { f: 880, v: 1.0, d: 2.5 },
+      { f: 1320, v: 0.4, d: 1.8 },
+      { f: 1760, v: 0.2, d: 1.2 }
+    ];
+    harmonics.forEach(h => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = h.f;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol * 0.5 * h.v, t + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + h.d);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + h.d);
+    });
+  },
+
+  chime(ctx, vol) {
+    const t = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      const start = t + i * 0.13;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.4, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 1.4);
+    });
+  },
+
+  beep(ctx, vol) {
+    const t = ctx.currentTime;
+    [0, 0.18, 0.36].forEach(off => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 1000;
+      osc.type = 'square';
+      const start = t + off;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.18, start + 0.005);
+      gain.gain.setValueAtTime(vol * 0.18, start + 0.09);
+      gain.gain.linearRampToValueAtTime(0, start + 0.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.12);
+    });
+  },
+
+  soft(ctx, vol) {
+    const t = ctx.currentTime;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 1200;
+    filter.Q.value = 0.5;
+
+    const notes = [392, 523.25];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'triangle';
+      const start = t + i * 0.2;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.4, start + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 1.6);
+      osc.connect(gain).connect(filter);
+      osc.start(start);
+      osc.stop(start + 1.6);
+    });
+    filter.connect(ctx.destination);
+  },
+
+  marimba(ctx, vol) {
+    const t = ctx.currentTime;
+    const notes = [659.25, 880, 1046.5]; // E5, A5, C6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      osc2.frequency.value = freq * 4;
+      osc2.type = 'sine';
+      const gain2 = ctx.createGain();
+      gain2.gain.value = 0.2;
+
+      const start = t + i * 0.09;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(vol * 0.5, start + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+
+      osc.connect(gain);
+      osc2.connect(gain2);
+      gain2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(start);
+      osc2.start(start);
+      osc.stop(start + 0.5);
+      osc2.stop(start + 0.5);
+    });
+  }
+};
+
+// ============================================
+// Notifications
+// ============================================
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+function notify(title, body) {
+  if (!state.settings.notifications) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, { body, silent: true });
+  } catch (e) { /* ignore */ }
+}
+
+// ============================================
+// Timer Logic
+// ============================================
+
+function getPhaseDurationMs(preset, phase) {
+  if (phase === 'focus') return preset.focus * 60 * 1000;
+  if (phase === 'longBreak') return preset.longBreak * 60 * 1000;
+  return preset.break * 60 * 1000;
+}
+
+function getPhaseLabel(phase) {
+  if (phase === 'focus') return 'Focus';
+  if (phase === 'longBreak') return 'Long Break';
+  return 'Break';
+}
+
+function startTimer() {
+  const preset = getActivePreset();
+
+  if (preset.type === 'flowtime') {
+    if (state.timer.phase === 'focus') {
+      // Count up
+      if (state.timer.isPaused) {
+        state.timer.countUpStart = Date.now() - state.timer.elapsedMs;
+      } else {
+        state.timer.elapsedMs = 0;
+        state.timer.countUpStart = Date.now();
+      }
+    } else {
+      // Break is countdown
+      if (state.timer.isPaused) {
+        state.timer.endTime = Date.now() + state.timer.remainingMs;
+      } else {
+        state.timer.endTime = Date.now() + state.timer.remainingMs;
+      }
+    }
+    state.timer.isRunning = true;
+    state.timer.isPaused = false;
+    tick();
+    render();
+    return;
+  }
+
+  // Standard preset
+  if (state.timer.isPaused) {
+    state.timer.endTime = Date.now() + state.timer.remainingMs;
+  } else {
+    state.timer.totalMs = getPhaseDurationMs(preset, state.timer.phase);
+    state.timer.remainingMs = state.timer.totalMs;
+    state.timer.endTime = Date.now() + state.timer.remainingMs;
+  }
+  state.timer.isRunning = true;
+  state.timer.isPaused = false;
+  tick();
+  render();
+}
+
+function pauseTimer() {
+  if (!state.timer.isRunning) return;
+  const preset = getActivePreset();
+
+  if (preset.type === 'flowtime' && state.timer.phase === 'focus') {
+    state.timer.elapsedMs = Date.now() - state.timer.countUpStart;
+  } else {
+    state.timer.remainingMs = Math.max(0, state.timer.endTime - Date.now());
+  }
+  state.timer.isRunning = false;
+  state.timer.isPaused = true;
+  cancelAnimationFrame(state.rafHandle);
+  render();
+}
+
+function resetTimer() {
+  state.timer.isRunning = false;
+  state.timer.isPaused = false;
+  state.timer.phase = 'focus';
+  state.timer.cycle = 1;
+  state.timer.elapsedMs = 0;
+  cancelAnimationFrame(state.rafHandle);
+
+  const preset = getActivePreset();
+  if (preset.type === 'flowtime') {
+    state.timer.totalMs = 0;
+    state.timer.remainingMs = 0;
+  } else {
+    state.timer.totalMs = getPhaseDurationMs(preset, 'focus');
+    state.timer.remainingMs = state.timer.totalMs;
+  }
+  render();
+}
+
+function skipPhase() {
+  const preset = getActivePreset();
+  cancelAnimationFrame(state.rafHandle);
+
+  if (preset.type === 'flowtime' && state.timer.phase === 'focus') {
+    // End count-up, calculate break
+    const elapsed = state.timer.isRunning
+      ? Date.now() - state.timer.countUpStart
+      : state.timer.elapsedMs;
+    state.timer.elapsedMs = elapsed;
+
+    // Record stat
+    if (elapsed > 0) recordSession(elapsed);
+
+    const breakMs = getFlowtimeBreak(elapsed);
+    state.timer.phase = 'break';
+    state.timer.totalMs = breakMs;
+    state.timer.remainingMs = breakMs;
+    state.timer.isRunning = false;
+    state.timer.isPaused = false;
+    notify('Focus session ended', `Take a ${Math.round(breakMs/60000)}-minute break.`);
+    Sounds.play(state.settings.sound);
+    render();
+    return;
+  }
+
+  advancePhase(false); // skipped, don't count session
+}
+
+function tick() {
+  if (!state.timer.isRunning) return;
+  const preset = getActivePreset();
+
+  if (preset.type === 'flowtime' && state.timer.phase === 'focus') {
+    state.timer.elapsedMs = Date.now() - state.timer.countUpStart;
+    updateDisplay();
+    state.rafHandle = requestAnimationFrame(tick);
+    return;
+  }
+
+  const remaining = state.timer.endTime - Date.now();
+  if (remaining <= 0) {
+    state.timer.remainingMs = 0;
+    handlePhaseComplete();
+    return;
+  }
+  state.timer.remainingMs = remaining;
+  updateDisplay();
+  state.rafHandle = requestAnimationFrame(tick);
+}
+
+function handlePhaseComplete() {
+  state.timer.isRunning = false;
+  state.timer.isPaused = false;
+  cancelAnimationFrame(state.rafHandle);
+
+  const preset = getActivePreset();
+  const completedPhase = state.timer.phase;
+
+  if (completedPhase === 'focus') {
+    // Record session
+    recordSession(state.timer.totalMs);
+  }
+
+  Sounds.play(state.settings.sound);
+
+  // Determine next phase
+  advancePhase(true);
+
+  // Auto-start logic
+  if (completedPhase === 'focus' && state.settings.autoBreak) {
+    setTimeout(() => startTimer(), 500);
+  } else if ((completedPhase === 'break' || completedPhase === 'longBreak') && state.settings.autoFocus) {
+    setTimeout(() => startTimer(), 500);
+  }
+}
+
+function advancePhase(completed) {
+  const preset = getActivePreset();
+
+  if (preset.type === 'flowtime') {
+    // Toggle between focus and break
+    if (state.timer.phase === 'focus') {
+      // shouldn't reach here since handled in skip; safety fallback
+      state.timer.phase = 'break';
+      state.timer.totalMs = 5 * 60 * 1000;
+    } else {
+      state.timer.phase = 'focus';
+      state.timer.totalMs = 0;
+      state.timer.elapsedMs = 0;
+    }
+    state.timer.remainingMs = state.timer.totalMs;
+    notify(`${getPhaseLabel(state.timer.phase)} starting`, '');
+    render();
+    return;
+  }
+
+  if (state.timer.phase === 'focus') {
+    // Decide break or long break
+    if (state.timer.cycle >= preset.cycles) {
+      state.timer.phase = 'longBreak';
+      state.timer.totalMs = getPhaseDurationMs(preset, 'longBreak');
+    } else {
+      state.timer.phase = 'break';
+      state.timer.totalMs = getPhaseDurationMs(preset, 'break');
+    }
+  } else if (state.timer.phase === 'break') {
+    state.timer.phase = 'focus';
+    state.timer.cycle += 1;
+    state.timer.totalMs = getPhaseDurationMs(preset, 'focus');
+  } else if (state.timer.phase === 'longBreak') {
+    state.timer.phase = 'focus';
+    state.timer.cycle = 1;
+    state.timer.totalMs = getPhaseDurationMs(preset, 'focus');
+  }
+
+  state.timer.remainingMs = state.timer.totalMs;
+
+  if (completed) {
+    notify(`${getPhaseLabel(state.timer.phase)} time`, getPhaseStartMessage());
+  }
+  render();
+}
+
+function getPhaseStartMessage() {
+  if (state.timer.phase === 'focus') return 'Time to focus.';
+  if (state.timer.phase === 'longBreak') return 'Take a longer break — you earned it.';
+  return 'Take a short break.';
+}
+
+function recordSession(focusMs) {
+  const key = todayKey();
+  if (!state.stats.daily[key]) state.stats.daily[key] = { sessions: 0, focusMs: 0 };
+  state.stats.daily[key].sessions += 1;
+  state.stats.daily[key].focusMs += focusMs;
+  state.stats.totalSessions += 1;
+  state.stats.totalFocusMs += focusMs;
+  saveState();
+}
+
+// ============================================
+// Rendering
+// ============================================
+
+const RING_CIRC = 2 * Math.PI * 150; // ≈ 942.48
+
+function updateDisplay() {
+  const preset = getActivePreset();
+  const phase = state.timer.phase;
+  let display, progress;
+
+  if (preset.type === 'flowtime' && phase === 'focus') {
+    display = formatTime(state.timer.elapsedMs);
+    progress = 1; // ring full when counting up
+  } else {
+    const total = state.timer.totalMs || 1;
+    const rem = state.timer.remainingMs;
+    display = formatTime(rem);
+    progress = Math.max(0, Math.min(1, rem / total));
+  }
+
+  document.getElementById('time-display').textContent = display;
+
+  const ring = document.getElementById('ring-progress');
+  ring.style.strokeDashoffset = RING_CIRC * (1 - progress);
+  ring.setAttribute('data-phase', phase);
+
+  // Update tab title
+  const phaseLabel = getPhaseLabel(phase);
+  document.title = `${display} · ${phaseLabel} — Focus`;
+}
+
+function render() {
+  renderPresets();
+  renderTimer();
+  renderStats();
+  renderManagePresets();
+  renderSoundOptions();
+  renderSettingsState();
+}
+
+function renderTimer() {
+  const preset = getActivePreset();
+  const phase = state.timer.phase;
+  const phaseLabel = getPhaseLabel(phase);
+
+  document.getElementById('phase-label').textContent = phaseLabel;
+  const badge = document.getElementById('phase-badge');
+  badge.setAttribute('data-phase', phase);
+  if (state.timer.isRunning) badge.classList.remove('idle');
+  else badge.classList.add('idle');
+
+  // Cycle info
+  const cycleInfo = document.getElementById('cycle-info');
+  if (preset.type === 'flowtime') {
+    cycleInfo.textContent = phase === 'focus' ? 'Flowtime · count up' : 'Recovery break';
+  } else {
+    cycleInfo.textContent = `Cycle ${state.timer.cycle} of ${preset.cycles}`;
+  }
+
+  // Time / ring
+  updateDisplay();
+
+  // Start button
+  const startLabel = document.getElementById('start-label');
+  const startIcon = document.getElementById('start-icon');
+  if (state.timer.isRunning) {
+    startLabel.textContent = 'Pause';
+    startIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+  } else if (state.timer.isPaused) {
+    startLabel.textContent = 'Resume';
+    startIcon.innerHTML = '<polygon points="6 4 20 12 6 20"/>';
+  } else {
+    startLabel.textContent = 'Start';
+    startIcon.innerHTML = '<polygon points="6 4 20 12 6 20"/>';
+  }
+
+  // Skip button label
+  const skipBtn = document.getElementById('skip-btn');
+  if (preset.type === 'flowtime' && phase === 'focus') {
+    skipBtn.firstChild.textContent = 'End  ';
+  } else {
+    skipBtn.firstChild.textContent = 'Skip  ';
+  }
+}
+
+function renderPresets() {
+  const container = document.getElementById('presets');
+  const items = state.presets.map(p => {
+    const eff = p.builtin && state.presetOverrides[p.id] ? { ...p, ...state.presetOverrides[p.id] } : p;
+    const isActive = p.id === state.activePresetId;
+    let meta = '';
+    if (p.type !== 'flowtime') meta = `<span class="meta">${eff.focus}/${eff.break}</span>`;
+    return `<button class="preset-pill${isActive ? ' active' : ''}" data-preset="${p.id}">
+      <span class="preset-name">${escapeHTML(p.name)}</span>${meta}
+    </button>`;
+  }).join('');
+
+  container.innerHTML = items + `
+    <button class="preset-pill add-preset" id="add-preset-btn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Custom
+    </button>
+  `;
+
+  // Bind
+  container.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => selectPreset(btn.dataset.preset));
+  });
+  document.getElementById('add-preset-btn').addEventListener('click', () => openPresetModal());
+}
+
+function renderStats() {
+  const today = state.stats.daily[todayKey()] || { sessions: 0, focusMs: 0 };
+  const week = getWeekStats();
+  document.getElementById('stat-sessions-today').textContent = today.sessions;
+  document.getElementById('stat-focus-today').textContent = formatDuration(today.focusMs);
+  document.getElementById('stat-sessions-week').textContent = `${week.sessions} this week`;
+  document.getElementById('stat-focus-week').textContent = `${formatDuration(week.focusMs)} this week`;
+  document.getElementById('stat-focus-total').textContent = formatDuration(state.stats.totalFocusMs);
+  document.getElementById('stat-sessions-total').textContent = `${state.stats.totalSessions} sessions`;
+  document.getElementById('today-date').textContent = formatTodayDate();
+}
+
+function renderManagePresets() {
+  const list = document.getElementById('preset-manage-list');
+  if (state.presets.length === 0) {
+    list.innerHTML = `<div class="empty-state">No presets yet</div>`;
+    return;
+  }
+  list.innerHTML = state.presets.map(p => {
+    const eff = p.builtin && state.presetOverrides[p.id] ? { ...p, ...state.presetOverrides[p.id] } : p;
+    const customized = p.builtin && state.presetOverrides[p.id];
+    const editable = p.type !== 'flowtime'; // can't edit flowtime durations
+    return `<div class="preset-item">
+      <div class="info">
+        <div class="name">${escapeHTML(p.name)}${customized ? ' <span style="font-size:11px;color:var(--text-subtle);font-weight:400;">· customized</span>' : ''}</div>
+        <div class="desc">${getPresetSummary(eff)}</div>
+      </div>
+      <div class="preset-actions">
+        ${editable ? `<button class="icon-btn" data-edit="${p.id}" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : ''}
+        ${!p.builtin ? `<button class="icon-btn" data-delete="${p.id}" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>` : ''}
+        ${customized ? `<button class="icon-btn" data-resetpreset="${p.id}" title="Reset to default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => openPresetModal(btn.dataset.edit));
+  });
+  list.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deletePreset(btn.dataset.delete));
+  });
+  list.querySelectorAll('[data-resetpreset]').forEach(btn => {
+    btn.addEventListener('click', () => resetPresetOverride(btn.dataset.resetpreset));
+  });
+}
+
+function renderSoundOptions() {
+  const container = document.getElementById('sound-options');
+  container.innerHTML = SOUNDS.map(s => `
+    <div class="sound-option${state.settings.sound === s.id ? ' active' : ''}" data-sound="${s.id}">
+      <span>${s.name}</span>
+      ${s.id !== 'none' ? `<button class="play" data-play="${s.id}" title="Preview"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg></button>` : '<span></span>'}
+    </div>
+  `).join('');
+
+  container.querySelectorAll('[data-sound]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('[data-play]')) return;
+      state.settings.sound = el.dataset.sound;
+      saveState();
+      renderSoundOptions();
+    });
+  });
+  container.querySelectorAll('[data-play]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Sounds.play(btn.dataset.play);
+    });
+  });
+}
+
+function renderSettingsState() {
+  document.getElementById('theme-select').value = state.settings.theme;
+  setToggle('notif-toggle', state.settings.notifications);
+  setToggle('autobreak-toggle', state.settings.autoBreak);
+  setToggle('autofocus-toggle', state.settings.autoFocus);
+  document.getElementById('volume-slider').value = state.settings.volume * 100;
+  document.getElementById('volume-display').textContent = Math.round(state.settings.volume * 100) + '%';
+}
+
+function setToggle(id, active) {
+  const el = document.getElementById(id);
+  if (active) el.classList.add('active');
+  else el.classList.remove('active');
+}
+
+// ============================================
+// Preset selection & modal
+// ============================================
+
+function selectPreset(id) {
+  if (state.timer.isRunning || state.timer.isPaused) {
+    if (!confirm('Switch presets? This will reset the current timer.')) return;
+  }
+  state.activePresetId = id;
+  resetTimer();
+  saveState();
+  render();
+}
+
+function openPresetModal(presetId) {
+  const modal = document.getElementById('preset-modal');
+  const titleEl = document.getElementById('preset-modal-title');
+  const nameInput = document.getElementById('preset-name');
+  const focusInput = document.getElementById('preset-focus');
+  const breakInput = document.getElementById('preset-break');
+  const longInput = document.getElementById('preset-longbreak');
+  const cyclesInput = document.getElementById('preset-cycles');
+  const deleteBtn = document.getElementById('preset-delete-btn');
+
+  state.editingPresetId = presetId || null;
+
+  if (presetId) {
+    const preset = getPresetById(presetId);
+    if (preset.type === 'flowtime') {
+      showToast('Flowtime durations are auto-calculated');
+      return;
+    }
+    titleEl.textContent = preset.builtin ? `Edit ${preset.name}` : 'Edit preset';
+    nameInput.value = preset.name;
+    nameInput.disabled = !!preset.builtin;
+    focusInput.value = preset.focus;
+    breakInput.value = preset.break;
+    longInput.value = preset.longBreak;
+    cyclesInput.value = preset.cycles;
+    deleteBtn.style.display = preset.builtin ? 'none' : 'inline-flex';
+  } else {
+    titleEl.textContent = 'New preset';
+    nameInput.value = '';
+    nameInput.disabled = false;
+    focusInput.value = 25;
+    breakInput.value = 5;
+    longInput.value = 15;
+    cyclesInput.value = 4;
+    deleteBtn.style.display = 'none';
+  }
+
+  modal.classList.add('open');
+  setTimeout(() => nameInput.focus(), 100);
+}
+
+function savePresetFromModal() {
+  const name = document.getElementById('preset-name').value.trim();
+  const focus = parseInt(document.getElementById('preset-focus').value, 10);
+  const brk = parseInt(document.getElementById('preset-break').value, 10);
+  const longBreak = parseInt(document.getElementById('preset-longbreak').value, 10);
+  const cycles = parseInt(document.getElementById('preset-cycles').value, 10);
+
+  if (!name) { showToast('Please enter a name'); return; }
+  if (!focus || focus < 1 || focus > 180) { showToast('Focus must be 1–180 minutes'); return; }
+  if (!brk || brk < 1 || brk > 60) { showToast('Break must be 1–60 minutes'); return; }
+  if (!longBreak || longBreak < 1 || longBreak > 60) { showToast('Long break must be 1–60 minutes'); return; }
+  if (!cycles || cycles < 1 || cycles > 12) { showToast('Cycles must be 1–12'); return; }
+
+  if (state.editingPresetId) {
+    const preset = state.presets.find(p => p.id === state.editingPresetId);
+    if (preset.builtin) {
+      // Save override
+      state.presetOverrides[preset.id] = { focus, break: brk, longBreak, cycles };
+    } else {
+      // Update custom preset
+      preset.name = name;
+      preset.focus = focus;
+      preset.break = brk;
+      preset.longBreak = longBreak;
+      preset.cycles = cycles;
+    }
+    showToast('Preset updated');
+  } else {
+    // Create new
+    const id = 'custom-' + Date.now();
+    state.presets.push({
+      id, name, focus, break: brk, longBreak, cycles,
+      type: 'standard', builtin: false
+    });
+    showToast('Preset created');
+  }
+
+  // If editing the active preset, reset timer to apply
+  if (state.editingPresetId === state.activePresetId && !state.timer.isRunning) {
+    resetTimer();
+  }
+
+  saveState();
+  closeModal('preset-modal');
+  render();
+}
+
+function deletePreset(id) {
+  if (!confirm('Delete this preset?')) return;
+  state.presets = state.presets.filter(p => p.id !== id);
+  if (state.activePresetId === id) {
+    state.activePresetId = 'pomodoro';
+    resetTimer();
+  }
+  saveState();
+  render();
+  closeModal('preset-modal');
+  showToast('Preset deleted');
+}
+
+function resetPresetOverride(id) {
+  if (!confirm('Reset this preset to its default values?')) return;
+  delete state.presetOverrides[id];
+  if (state.activePresetId === id && !state.timer.isRunning) resetTimer();
+  saveState();
+  render();
+  showToast('Preset reset');
+}
+
+// ============================================
+// Modals
+// ============================================
+
+function openModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.addEventListener('click', (e) => {
+    const modal = e.currentTarget.closest('.modal');
+    if (modal) modal.classList.remove('open');
+  });
+});
+
+// ============================================
+// Toast
+// ============================================
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ============================================
+// Event Bindings
+// ============================================
+
+document.getElementById('start-btn').addEventListener('click', () => {
+  if (state.timer.isRunning) pauseTimer();
+  else startTimer();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  resetTimer();
+});
+
+document.getElementById('skip-btn').addEventListener('click', () => {
+  skipPhase();
+});
+
+document.getElementById('settings-btn').addEventListener('click', () => openModal('settings-modal'));
+document.getElementById('stats-btn').addEventListener('click', () => {
+  // Scroll to stats area
+  document.querySelector('.stats').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+document.getElementById('theme-btn').addEventListener('click', toggleTheme);
+
+document.getElementById('theme-select').addEventListener('change', (e) => {
+  state.settings.theme = e.target.value;
+  applyTheme();
+  saveState();
+});
+
+document.getElementById('notif-toggle').addEventListener('click', async () => {
+  if (!state.settings.notifications) {
+    const ok = await requestNotifPermission();
+    if (!ok) {
+      showToast('Notification permission denied');
+      return;
+    }
+    state.settings.notifications = true;
+  } else {
+    state.settings.notifications = false;
+  }
+  saveState();
+  renderSettingsState();
+});
+
+document.getElementById('autobreak-toggle').addEventListener('click', () => {
+  state.settings.autoBreak = !state.settings.autoBreak;
+  saveState();
+  renderSettingsState();
+});
+
+document.getElementById('autofocus-toggle').addEventListener('click', () => {
+  state.settings.autoFocus = !state.settings.autoFocus;
+  saveState();
+  renderSettingsState();
+});
+
+document.getElementById('volume-slider').addEventListener('input', (e) => {
+  state.settings.volume = parseInt(e.target.value, 10) / 100;
+  document.getElementById('volume-display').textContent = e.target.value + '%';
+});
+
+document.getElementById('volume-slider').addEventListener('change', () => {
+  saveState();
+});
+
+document.getElementById('add-preset-btn-2').addEventListener('click', () => {
+  closeModal('settings-modal');
+  setTimeout(() => openPresetModal(), 200);
+});
+
+document.getElementById('preset-save-btn').addEventListener('click', savePresetFromModal);
+document.getElementById('preset-delete-btn').addEventListener('click', () => {
+  if (state.editingPresetId) deletePreset(state.editingPresetId);
+});
+
+document.getElementById('reset-stats-btn').addEventListener('click', () => {
+  if (!confirm('Reset all statistics? This cannot be undone.')) return;
+  state.stats = { daily: {}, totalSessions: 0, totalFocusMs: 0 };
+  saveState();
+  render();
+  showToast('Statistics reset');
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Ignore if typing in inputs
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  // Ignore if modal open
+  const modalOpen = document.querySelector('.modal.open');
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (modalOpen) return;
+    if (state.timer.isRunning) pauseTimer();
+    else startTimer();
+  } else if (e.key === 'r' || e.key === 'R') {
+    if (modalOpen) return;
+    resetTimer();
+  } else if (e.key === 's' || e.key === 'S') {
+    if (modalOpen) return;
+    skipPhase();
+  } else if (e.key === 'Escape') {
+    if (modalOpen) modalOpen.classList.remove('open');
+  }
+});
+
+// Pause timer when window loses focus? No - keep running but on visibility we recalc
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.timer.isRunning) {
+    // Force tick to catch up
+    cancelAnimationFrame(state.rafHandle);
+    tick();
+  }
+});
+
+// ============================================
+// Init
+// ============================================
+
+function init() {
+  loadState();
+  applyTheme();
+  resetTimer();
+  render();
+
+  // Pre-populate sync between modal toggle and theme dropdown
+  document.getElementById('theme-select').value = state.settings.theme;
+}
+
+init();
+
+</script>
+</body>
+</html>

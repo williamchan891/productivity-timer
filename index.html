@@ -303,7 +303,12 @@
     font-size: 13px;
     color: var(--text-subtle);
     font-weight: 500;
-    min-height: 19px; /* prevent layout shift when empty */
+  }
+
+  /* When cycle-info has no content (invariant presets), remove it from
+     the flex layout entirely so the time stays perfectly centered. */
+  .cycle-info:empty {
+    display: none;
   }
 
   /* Controls */
@@ -1070,10 +1075,6 @@ const SOUNDS = [
   { id: 'none',    name: 'Silent' }
 ];
 
-// ============================================
-// State
-// ============================================
-
 const state = {
   presets: [],
   presetOverrides: {},
@@ -1105,10 +1106,6 @@ const state = {
   editingPresetId: null,
   rafHandle: null
 };
-
-// ============================================
-// Storage
-// ============================================
 
 function saveState() {
   try {
@@ -1147,10 +1144,6 @@ function loadState() {
   }
 }
 
-// ============================================
-// Helpers
-// ============================================
-
 function getActivePreset() {
   const base = state.presets.find(p => p.id === state.activePresetId) || state.presets[0];
   if (base.builtin && state.presetOverrides[base.id]) {
@@ -1166,8 +1159,6 @@ function getPresetById(id) {
   return p;
 }
 
-// A preset is "invariant" when every cycle is identical:
-// short and long breaks are equal, so there's no meaningful long-break boundary.
 function isInvariantPreset(preset) {
   if (!preset || preset.type !== 'standard') return false;
   return preset.break === preset.longBreak;
@@ -1246,10 +1237,6 @@ function getFlowtimeBreak(workMs) {
   return 15 * 60 * 1000;
 }
 
-// ============================================
-// Theme
-// ============================================
-
 function applyTheme() {
   const setting = state.settings.theme;
   let theme = setting;
@@ -1283,13 +1270,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
   if (state.settings.theme === 'auto') applyTheme();
 });
 
-// ============================================
-// Sound Engine
-// ============================================
-
 const Sounds = {
   ctx: null,
-
   ensureCtx() {
     if (!this.ctx) {
       try {
@@ -1301,18 +1283,15 @@ const Sounds = {
     if (this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
   },
-
   play(name, vol) {
     if (name === 'none') return;
     const ctx = this.ensureCtx();
     if (!ctx) return;
     vol = vol == null ? state.settings.volume : vol;
     if (vol <= 0) return;
-
     const fn = this[name];
     if (typeof fn === 'function') fn.call(this, ctx, vol);
   },
-
   bell(ctx, vol) {
     const t = ctx.currentTime;
     const harmonics = [
@@ -1333,7 +1312,6 @@ const Sounds = {
       osc.stop(t + h.d);
     });
   },
-
   chime(ctx, vol) {
     const t = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99];
@@ -1351,7 +1329,6 @@ const Sounds = {
       osc.stop(start + 1.4);
     });
   },
-
   beep(ctx, vol) {
     const t = ctx.currentTime;
     [0, 0.18, 0.36].forEach(off => {
@@ -1369,14 +1346,12 @@ const Sounds = {
       osc.stop(start + 0.12);
     });
   },
-
   soft(ctx, vol) {
     const t = ctx.currentTime;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 1200;
     filter.Q.value = 0.5;
-
     const notes = [392, 523.25];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
@@ -1393,7 +1368,6 @@ const Sounds = {
     });
     filter.connect(ctx.destination);
   },
-
   marimba(ctx, vol) {
     const t = ctx.currentTime;
     const notes = [659.25, 880, 1046.5];
@@ -1407,17 +1381,14 @@ const Sounds = {
       osc2.type = 'sine';
       const gain2 = ctx.createGain();
       gain2.gain.value = 0.2;
-
       const start = t + i * 0.09;
       gain.gain.setValueAtTime(0, start);
       gain.gain.linearRampToValueAtTime(vol * 0.5, start + 0.003);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
-
       osc.connect(gain);
       osc2.connect(gain2);
       gain2.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start(start);
       osc2.start(start);
       osc.stop(start + 0.5);
@@ -1425,10 +1396,6 @@ const Sounds = {
     });
   }
 };
-
-// ============================================
-// Notifications
-// ============================================
 
 async function requestNotifPermission() {
   if (!('Notification' in window)) return false;
@@ -1443,12 +1410,8 @@ function notify(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
     new Notification(title, { body, silent: true });
-  } catch (e) { /* ignore */ }
+  } catch (e) { }
 }
-
-// ============================================
-// Timer Logic
-// ============================================
 
 function getPhaseDurationMs(preset, phase) {
   if (phase === 'focus') return preset.focus * 60 * 1000;
@@ -1539,9 +1502,7 @@ function skipPhase() {
       ? Date.now() - state.timer.countUpStart
       : state.timer.elapsedMs;
     state.timer.elapsedMs = elapsed;
-
     if (elapsed > 0) recordSession(elapsed);
-
     const breakMs = getFlowtimeBreak(elapsed);
     state.timer.phase = 'break';
     state.timer.totalMs = breakMs;
@@ -1585,13 +1546,8 @@ function handlePhaseComplete() {
   cancelAnimationFrame(state.rafHandle);
 
   const completedPhase = state.timer.phase;
-
-  if (completedPhase === 'focus') {
-    recordSession(state.timer.totalMs);
-  }
-
+  if (completedPhase === 'focus') recordSession(state.timer.totalMs);
   Sounds.play(state.settings.sound);
-
   advancePhase(true);
 
   if (completedPhase === 'focus' && state.settings.autoBreak) {
@@ -1622,7 +1578,6 @@ function advancePhase(completed) {
   const invariant = isInvariantPreset(preset);
 
   if (state.timer.phase === 'focus') {
-    // For invariant presets, every break is the same — never enter longBreak.
     if (!invariant && state.timer.cycle >= preset.cycles) {
       state.timer.phase = 'longBreak';
       state.timer.totalMs = getPhaseDurationMs(preset, 'longBreak');
@@ -1632,7 +1587,6 @@ function advancePhase(completed) {
     }
   } else if (state.timer.phase === 'break') {
     state.timer.phase = 'focus';
-    // Invariant: cycle is irrelevant; keep at 1.
     state.timer.cycle = invariant ? 1 : state.timer.cycle + 1;
     state.timer.totalMs = getPhaseDurationMs(preset, 'focus');
   } else if (state.timer.phase === 'longBreak') {
@@ -1666,10 +1620,6 @@ function recordSession(focusMs) {
   saveState();
 }
 
-// ============================================
-// Rendering
-// ============================================
-
 const RING_CIRC = 2 * Math.PI * 150;
 
 function updateDisplay() {
@@ -1688,7 +1638,6 @@ function updateDisplay() {
   }
 
   document.getElementById('time-display').textContent = display;
-
   const ring = document.getElementById('ring-progress');
   ring.style.strokeDashoffset = RING_CIRC * (1 - progress);
   ring.setAttribute('data-phase', phase);
@@ -1717,12 +1666,14 @@ function renderTimer() {
   if (state.timer.isRunning) badge.classList.remove('idle');
   else badge.classList.add('idle');
 
-  // Cycle / context label below time
+  // Cycle / context label below time.
+  // For invariant presets, the textContent is set to '' so that
+  // `.cycle-info:empty { display: none }` collapses the element entirely
+  // and the time stays perfectly centered in the ring.
   const cycleInfo = document.getElementById('cycle-info');
   if (preset.type === 'flowtime') {
     cycleInfo.textContent = phase === 'focus' ? 'Flowtime · count up' : 'Recovery break';
   } else if (isInvariantPreset(preset)) {
-    // Constant cycles: no cycle counting, no long-break notion.
     cycleInfo.textContent = '';
   } else {
     cycleInfo.textContent = `Cycle ${state.timer.cycle} of ${preset.cycles}`;
@@ -1864,10 +1815,6 @@ function setToggle(id, active) {
   else el.classList.remove('active');
 }
 
-// ============================================
-// Preset selection & modal
-// ============================================
-
 function selectPreset(id) {
   if (state.timer.isRunning || state.timer.isPaused) {
     if (!confirm('Switch presets? This will reset the current timer.')) return;
@@ -2005,10 +1952,6 @@ function resetPresetOverride(id) {
   showToast('Preset reset');
 }
 
-// ============================================
-// Modals
-// ============================================
-
 function openModal(id) {
   document.getElementById(id).classList.add('open');
 }
@@ -2024,10 +1967,6 @@ document.querySelectorAll('[data-close]').forEach(el => {
   });
 });
 
-// ============================================
-// Toast
-// ============================================
-
 let toastTimer;
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -2036,10 +1975,6 @@ function showToast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
 }
-
-// ============================================
-// Event Bindings
-// ============================================
 
 document.getElementById('start-btn').addEventListener('click', () => {
   if (state.timer.isRunning) pauseTimer();
@@ -2113,7 +2048,6 @@ document.getElementById('preset-delete-btn').addEventListener('click', () => {
   if (state.editingPresetId) deletePreset(state.editingPresetId);
 });
 
-// Live-update the invariant note as the user types in break / longBreak
 document.getElementById('preset-break').addEventListener('input', updatePresetModalInvariantState);
 document.getElementById('preset-longbreak').addEventListener('input', updatePresetModalInvariantState);
 
@@ -2154,21 +2088,15 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// ============================================
-// Init
-// ============================================
-
 function init() {
   loadState();
   applyTheme();
   resetTimer();
   render();
-
   document.getElementById('theme-select').value = state.settings.theme;
 }
 
 init();
-
 </script>
 </body>
 </html>

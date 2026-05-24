@@ -303,6 +303,7 @@
     font-size: 13px;
     color: var(--text-subtle);
     font-weight: 500;
+    min-height: 19px; /* prevent layout shift when empty */
   }
 
   /* Controls */
@@ -494,8 +495,9 @@
   }
 
   /* Form */
-  .form-group { margin-bottom: 18px; }
+  .form-group { margin-bottom: 18px; transition: opacity var(--transition); }
   .form-group:last-child { margin-bottom: 0; }
+  .form-group.disabled { opacity: 0.45; }
 
   .form-label {
     display: block;
@@ -531,11 +533,31 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 8%, transparent);
   }
 
+  .form-input:disabled { cursor: not-allowed; }
+
   .form-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
+
+  /* Invariant note in editor */
+  .invariant-note {
+    display: none;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--break) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--break) 25%, transparent);
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: -8px;
+    margin-bottom: 18px;
+    line-height: 1.45;
+  }
+
+  .invariant-note.show { display: block; }
+
+  .invariant-note strong { color: var(--text); font-weight: 600; }
 
   /* Section header inside modal */
   .section-header {
@@ -995,16 +1017,19 @@
         </div>
       </div>
       <div class="form-row">
-        <div class="form-group">
+        <div class="form-group" id="preset-longbreak-group">
           <label class="form-label" for="preset-longbreak">Long break</label>
           <input type="number" class="form-input" id="preset-longbreak" min="1" max="60" value="15">
           <div class="form-help">In minutes (1–60)</div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="preset-cycles-group">
           <label class="form-label" for="preset-cycles">Cycles before long break</label>
           <input type="number" class="form-input" id="preset-cycles" min="1" max="12" value="4">
           <div class="form-help">Focus rounds (1–12)</div>
         </div>
+      </div>
+      <div class="invariant-note" id="invariant-note">
+        <strong>Constant cycles.</strong> Long break equals short break, so every cycle is identical — there's no separate "long break" and no cycle counting.
       </div>
     </div>
     <div class="modal-footer">
@@ -1051,7 +1076,7 @@ const SOUNDS = [
 
 const state = {
   presets: [],
-  presetOverrides: {}, // overrides for builtin presets: { id: { focus, break, longBreak, cycles } }
+  presetOverrides: {},
   activePresetId: 'pomodoro',
   settings: {
     theme: 'auto',
@@ -1062,20 +1087,20 @@ const state = {
     autoFocus: false
   },
   stats: {
-    daily: {}, // { 'YYYY-MM-DD': { sessions, focusMs } }
+    daily: {},
     totalSessions: 0,
     totalFocusMs: 0
   },
   timer: {
     isRunning: false,
     isPaused: false,
-    phase: 'focus',  // 'focus' | 'break' | 'longBreak'
+    phase: 'focus',
     cycle: 1,
     remainingMs: 0,
     totalMs: 0,
     endTime: 0,
-    elapsedMs: 0,    // for flowtime
-    countUpStart: 0  // for flowtime
+    elapsedMs: 0,
+    countUpStart: 0
   },
   editingPresetId: null,
   rafHandle: null
@@ -1113,7 +1138,6 @@ function loadState() {
     state.settings = { ...state.settings, ...(data.settings || {}) };
     state.stats = { ...state.stats, ...(data.stats || {}) };
 
-    // Validate active preset exists
     if (!state.presets.find(p => p.id === state.activePresetId)) {
       state.activePresetId = 'pomodoro';
     }
@@ -1142,6 +1166,13 @@ function getPresetById(id) {
   return p;
 }
 
+// A preset is "invariant" when every cycle is identical:
+// short and long breaks are equal, so there's no meaningful long-break boundary.
+function isInvariantPreset(preset) {
+  if (!preset || preset.type !== 'standard') return false;
+  return preset.break === preset.longBreak;
+}
+
 function todayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -1152,7 +1183,7 @@ function todayKey(d = new Date()) {
 function startOfWeekKey() {
   const d = new Date();
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff));
 }
 
@@ -1203,6 +1234,7 @@ function escapeHTML(s) {
 
 function getPresetSummary(p) {
   if (p.type === 'flowtime') return 'Count up · auto-calculated break';
+  if (isInvariantPreset(p)) return `${p.focus}m focus · ${p.break}m break · constant cycles`;
   return `${p.focus}m focus · ${p.break}m break · long break every ${p.cycles}`;
 }
 
@@ -1238,7 +1270,6 @@ function updateThemeIcon(theme) {
 }
 
 function toggleTheme() {
-  // Cycle: auto -> light -> dark -> auto
   const order = ['auto', 'light', 'dark'];
   const idx = order.indexOf(state.settings.theme);
   state.settings.theme = order[(idx + 1) % order.length];
@@ -1248,7 +1279,6 @@ function toggleTheme() {
   document.getElementById('theme-select').value = state.settings.theme;
 }
 
-// Listen for system theme changes
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (state.settings.theme === 'auto') applyTheme();
 });
@@ -1306,7 +1336,7 @@ const Sounds = {
 
   chime(ctx, vol) {
     const t = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    const notes = [523.25, 659.25, 783.99];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -1366,7 +1396,7 @@ const Sounds = {
 
   marimba(ctx, vol) {
     const t = ctx.currentTime;
-    const notes = [659.25, 880, 1046.5]; // E5, A5, C6
+    const notes = [659.25, 880, 1046.5];
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
@@ -1437,7 +1467,6 @@ function startTimer() {
 
   if (preset.type === 'flowtime') {
     if (state.timer.phase === 'focus') {
-      // Count up
       if (state.timer.isPaused) {
         state.timer.countUpStart = Date.now() - state.timer.elapsedMs;
       } else {
@@ -1445,12 +1474,7 @@ function startTimer() {
         state.timer.countUpStart = Date.now();
       }
     } else {
-      // Break is countdown
-      if (state.timer.isPaused) {
-        state.timer.endTime = Date.now() + state.timer.remainingMs;
-      } else {
-        state.timer.endTime = Date.now() + state.timer.remainingMs;
-      }
+      state.timer.endTime = Date.now() + state.timer.remainingMs;
     }
     state.timer.isRunning = true;
     state.timer.isPaused = false;
@@ -1459,7 +1483,6 @@ function startTimer() {
     return;
   }
 
-  // Standard preset
   if (state.timer.isPaused) {
     state.timer.endTime = Date.now() + state.timer.remainingMs;
   } else {
@@ -1512,13 +1535,11 @@ function skipPhase() {
   cancelAnimationFrame(state.rafHandle);
 
   if (preset.type === 'flowtime' && state.timer.phase === 'focus') {
-    // End count-up, calculate break
     const elapsed = state.timer.isRunning
       ? Date.now() - state.timer.countUpStart
       : state.timer.elapsedMs;
     state.timer.elapsedMs = elapsed;
 
-    // Record stat
     if (elapsed > 0) recordSession(elapsed);
 
     const breakMs = getFlowtimeBreak(elapsed);
@@ -1533,7 +1554,7 @@ function skipPhase() {
     return;
   }
 
-  advancePhase(false); // skipped, don't count session
+  advancePhase(false);
 }
 
 function tick() {
@@ -1563,20 +1584,16 @@ function handlePhaseComplete() {
   state.timer.isPaused = false;
   cancelAnimationFrame(state.rafHandle);
 
-  const preset = getActivePreset();
   const completedPhase = state.timer.phase;
 
   if (completedPhase === 'focus') {
-    // Record session
     recordSession(state.timer.totalMs);
   }
 
   Sounds.play(state.settings.sound);
 
-  // Determine next phase
   advancePhase(true);
 
-  // Auto-start logic
   if (completedPhase === 'focus' && state.settings.autoBreak) {
     setTimeout(() => startTimer(), 500);
   } else if ((completedPhase === 'break' || completedPhase === 'longBreak') && state.settings.autoFocus) {
@@ -1588,9 +1605,7 @@ function advancePhase(completed) {
   const preset = getActivePreset();
 
   if (preset.type === 'flowtime') {
-    // Toggle between focus and break
     if (state.timer.phase === 'focus') {
-      // shouldn't reach here since handled in skip; safety fallback
       state.timer.phase = 'break';
       state.timer.totalMs = 5 * 60 * 1000;
     } else {
@@ -1604,9 +1619,11 @@ function advancePhase(completed) {
     return;
   }
 
+  const invariant = isInvariantPreset(preset);
+
   if (state.timer.phase === 'focus') {
-    // Decide break or long break
-    if (state.timer.cycle >= preset.cycles) {
+    // For invariant presets, every break is the same — never enter longBreak.
+    if (!invariant && state.timer.cycle >= preset.cycles) {
       state.timer.phase = 'longBreak';
       state.timer.totalMs = getPhaseDurationMs(preset, 'longBreak');
     } else {
@@ -1615,7 +1632,8 @@ function advancePhase(completed) {
     }
   } else if (state.timer.phase === 'break') {
     state.timer.phase = 'focus';
-    state.timer.cycle += 1;
+    // Invariant: cycle is irrelevant; keep at 1.
+    state.timer.cycle = invariant ? 1 : state.timer.cycle + 1;
     state.timer.totalMs = getPhaseDurationMs(preset, 'focus');
   } else if (state.timer.phase === 'longBreak') {
     state.timer.phase = 'focus';
@@ -1626,14 +1644,15 @@ function advancePhase(completed) {
   state.timer.remainingMs = state.timer.totalMs;
 
   if (completed) {
-    notify(`${getPhaseLabel(state.timer.phase)} time`, getPhaseStartMessage());
+    notify(`${getPhaseLabel(state.timer.phase)} time`, getPhaseStartMessage(preset));
   }
   render();
 }
 
-function getPhaseStartMessage() {
+function getPhaseStartMessage(preset) {
   if (state.timer.phase === 'focus') return 'Time to focus.';
   if (state.timer.phase === 'longBreak') return 'Take a longer break — you earned it.';
+  if (preset && isInvariantPreset(preset)) return 'Take a break.';
   return 'Take a short break.';
 }
 
@@ -1651,7 +1670,7 @@ function recordSession(focusMs) {
 // Rendering
 // ============================================
 
-const RING_CIRC = 2 * Math.PI * 150; // ≈ 942.48
+const RING_CIRC = 2 * Math.PI * 150;
 
 function updateDisplay() {
   const preset = getActivePreset();
@@ -1660,7 +1679,7 @@ function updateDisplay() {
 
   if (preset.type === 'flowtime' && phase === 'focus') {
     display = formatTime(state.timer.elapsedMs);
-    progress = 1; // ring full when counting up
+    progress = 1;
   } else {
     const total = state.timer.totalMs || 1;
     const rem = state.timer.remainingMs;
@@ -1674,7 +1693,6 @@ function updateDisplay() {
   ring.style.strokeDashoffset = RING_CIRC * (1 - progress);
   ring.setAttribute('data-phase', phase);
 
-  // Update tab title
   const phaseLabel = getPhaseLabel(phase);
   document.title = `${display} · ${phaseLabel} — Focus`;
 }
@@ -1699,18 +1717,19 @@ function renderTimer() {
   if (state.timer.isRunning) badge.classList.remove('idle');
   else badge.classList.add('idle');
 
-  // Cycle info
+  // Cycle / context label below time
   const cycleInfo = document.getElementById('cycle-info');
   if (preset.type === 'flowtime') {
     cycleInfo.textContent = phase === 'focus' ? 'Flowtime · count up' : 'Recovery break';
+  } else if (isInvariantPreset(preset)) {
+    // Constant cycles: no cycle counting, no long-break notion.
+    cycleInfo.textContent = '';
   } else {
     cycleInfo.textContent = `Cycle ${state.timer.cycle} of ${preset.cycles}`;
   }
 
-  // Time / ring
   updateDisplay();
 
-  // Start button
   const startLabel = document.getElementById('start-label');
   const startIcon = document.getElementById('start-icon');
   if (state.timer.isRunning) {
@@ -1724,7 +1743,6 @@ function renderTimer() {
     startIcon.innerHTML = '<polygon points="6 4 20 12 6 20"/>';
   }
 
-  // Skip button label
   const skipBtn = document.getElementById('skip-btn');
   if (preset.type === 'flowtime' && phase === 'focus') {
     skipBtn.firstChild.textContent = 'End  ';
@@ -1754,7 +1772,6 @@ function renderPresets() {
     </button>
   `;
 
-  // Bind
   container.querySelectorAll('[data-preset]').forEach(btn => {
     btn.addEventListener('click', () => selectPreset(btn.dataset.preset));
   });
@@ -1782,7 +1799,7 @@ function renderManagePresets() {
   list.innerHTML = state.presets.map(p => {
     const eff = p.builtin && state.presetOverrides[p.id] ? { ...p, ...state.presetOverrides[p.id] } : p;
     const customized = p.builtin && state.presetOverrides[p.id];
-    const editable = p.type !== 'flowtime'; // can't edit flowtime durations
+    const editable = p.type !== 'flowtime';
     return `<div class="preset-item">
       <div class="info">
         <div class="name">${escapeHTML(p.name)}${customized ? ' <span style="font-size:11px;color:var(--text-subtle);font-weight:400;">· customized</span>' : ''}</div>
@@ -1861,6 +1878,26 @@ function selectPreset(id) {
   render();
 }
 
+function updatePresetModalInvariantState() {
+  const brk = parseInt(document.getElementById('preset-break').value, 10);
+  const longBreak = parseInt(document.getElementById('preset-longbreak').value, 10);
+  const cyclesGroup = document.getElementById('preset-cycles-group');
+  const cyclesField = document.getElementById('preset-cycles');
+  const note = document.getElementById('invariant-note');
+
+  const invariant = (!isNaN(brk) && !isNaN(longBreak) && brk === longBreak);
+
+  if (invariant) {
+    cyclesGroup.classList.add('disabled');
+    cyclesField.disabled = true;
+    note.classList.add('show');
+  } else {
+    cyclesGroup.classList.remove('disabled');
+    cyclesField.disabled = false;
+    note.classList.remove('show');
+  }
+}
+
 function openPresetModal(presetId) {
   const modal = document.getElementById('preset-modal');
   const titleEl = document.getElementById('preset-modal-title');
@@ -1898,6 +1935,7 @@ function openPresetModal(presetId) {
     deleteBtn.style.display = 'none';
   }
 
+  updatePresetModalInvariantState();
   modal.classList.add('open');
   setTimeout(() => nameInput.focus(), 100);
 }
@@ -1918,10 +1956,8 @@ function savePresetFromModal() {
   if (state.editingPresetId) {
     const preset = state.presets.find(p => p.id === state.editingPresetId);
     if (preset.builtin) {
-      // Save override
       state.presetOverrides[preset.id] = { focus, break: brk, longBreak, cycles };
     } else {
-      // Update custom preset
       preset.name = name;
       preset.focus = focus;
       preset.break = brk;
@@ -1930,7 +1966,6 @@ function savePresetFromModal() {
     }
     showToast('Preset updated');
   } else {
-    // Create new
     const id = 'custom-' + Date.now();
     state.presets.push({
       id, name, focus, break: brk, longBreak, cycles,
@@ -1939,7 +1974,6 @@ function savePresetFromModal() {
     showToast('Preset created');
   }
 
-  // If editing the active preset, reset timer to apply
   if (state.editingPresetId === state.activePresetId && !state.timer.isRunning) {
     resetTimer();
   }
@@ -2022,7 +2056,6 @@ document.getElementById('skip-btn').addEventListener('click', () => {
 
 document.getElementById('settings-btn').addEventListener('click', () => openModal('settings-modal'));
 document.getElementById('stats-btn').addEventListener('click', () => {
-  // Scroll to stats area
   document.querySelector('.stats').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
@@ -2080,6 +2113,10 @@ document.getElementById('preset-delete-btn').addEventListener('click', () => {
   if (state.editingPresetId) deletePreset(state.editingPresetId);
 });
 
+// Live-update the invariant note as the user types in break / longBreak
+document.getElementById('preset-break').addEventListener('input', updatePresetModalInvariantState);
+document.getElementById('preset-longbreak').addEventListener('input', updatePresetModalInvariantState);
+
 document.getElementById('reset-stats-btn').addEventListener('click', () => {
   if (!confirm('Reset all statistics? This cannot be undone.')) return;
   state.stats = { daily: {}, totalSessions: 0, totalFocusMs: 0 };
@@ -2088,13 +2125,10 @@ document.getElementById('reset-stats-btn').addEventListener('click', () => {
   showToast('Statistics reset');
 });
 
-// Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-  // Ignore if typing in inputs
   const tag = document.activeElement.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
-  // Ignore if modal open
   const modalOpen = document.querySelector('.modal.open');
 
   if (e.code === 'Space') {
@@ -2113,10 +2147,8 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Pause timer when window loses focus? No - keep running but on visibility we recalc
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.timer.isRunning) {
-    // Force tick to catch up
     cancelAnimationFrame(state.rafHandle);
     tick();
   }
@@ -2132,7 +2164,6 @@ function init() {
   resetTimer();
   render();
 
-  // Pre-populate sync between modal toggle and theme dropdown
   document.getElementById('theme-select').value = state.settings.theme;
 }
 
